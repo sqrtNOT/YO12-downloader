@@ -41,13 +41,13 @@ for artist in artist_pages:
         artist_page = requests.get(artist['artist_url'], timeout=10)
         artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
         soups.append(artist_soup)
-    except ConnectionError as e:
+    except Exception as e:
         logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}")
         continue
     # Handle pagination because only 100 prints are displayed at a time
     try:
         print_count = int("".join([_ for _ in artist_soup.find('strong').text if _ in "0123456789"]))
-    except:
+    except Exception:
         logfile.write(f"failed to get print count for {artist['artist_url']}\n")
         print_count = 0
     if print_count > 100:
@@ -60,7 +60,7 @@ for artist in artist_pages:
                 artist_page = requests.get(artist['artist_url']+f"?start={start}", timeout=10)
                 artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
                 soups.append(artist_soup)
-            except ConnectionError as e:
+            except Exception as e:
                 logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}")
 
     # iterate over each artist page to get a list of individual works
@@ -72,7 +72,7 @@ for artist in artist_pages:
                 print_metadata['print_url'] = print_url
                 print_metadata['artist_path'] = artist_path+'/'
                 prints.append(print_metadata)
-            except:
+            except Exception:
                 logfile.write(f"{div} failed while extracting div from {artist}\n")
 
     # each print has its own page with metadata and a link to the full res image
@@ -82,7 +82,7 @@ for artist in artist_pages:
         try:
             print_page = requests.get(work['print_url'], timeout=10)
             print_soup = BeautifulSoup(print_page.text, 'html.parser')
-        except ConnectionError as e:
+        except Exception as e:
             logfile.write(f"got {type(e)} error when trying to download a print {work['print_url']}")
             continue
         metadata = print_soup.find('div', class_='details')
@@ -97,7 +97,7 @@ for artist in artist_pages:
             image_url = image_search['href']
             try:
                 image_extension = image_url.split('.')[-1]
-            except:
+            except Exception:
                 image_extension = ""
         else:
             # no image just skip
@@ -128,13 +128,13 @@ for artist in artist_pages:
         time.sleep(wait_time)
         try:
             image_response = requests.get(image_url, timeout=10)
-        except ConnectionError as e:
+        except Exception as e:
             logfile.write(f"got {type(e)} error when trying to download an image {image_url}")
             continue
         if image_response:
             try:
                 image = pyexiv2.ImageData(image_response.content)
-            except:
+            except Exception:
                 # no image content
                 logfile.write(f"{image_url} contains no content\n")
                 continue
@@ -146,11 +146,10 @@ for artist in artist_pages:
             image.clear_exif()
             image.modify_exif({'Exif.Image.ImageDescription': description,
                                'Exif.Image.Artist': work['artist_name']})
-        except:
+        except Exception:
             logfile.write(f"{filename} has no exif capability\n")
         # write file to disk
         with open(filepath, 'wb') as outfile:
             outfile.write(image.get_bytes())
 
 logfile.close()
-
