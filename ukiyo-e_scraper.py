@@ -35,19 +35,20 @@ for artist in artist_pages:
 
     print(f"throttling for {wait_time} seconds before grabbing first artist page")
     time.sleep(wait_time)
-
-    artist_page = requests.get(artist['artist_url'], timeout=10)
-    artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
     prints = []
     soups = []
-    soups.append(artist_soup)
-
-
+    try:
+        artist_page = requests.get(artist['artist_url'], timeout=10)
+        artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
+        soups.append(artist_soup)
+    except ConnectionError as e:
+        logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}")
+        continue
     # Handle pagination because only 100 prints are displayed at a time
     try:
         print_count = int("".join([_ for _ in artist_soup.find('strong').text if _ in "0123456789"]))
     except:
-        logfile.write(f"failed to get print count for {artist}\n")
+        logfile.write(f"failed to get print count for {artist['artist_url']}\n")
         print_count = 0
     if print_count > 100:
         for i in range(1, print_count//100+1):
@@ -55,9 +56,12 @@ for artist in artist_pages:
             time.sleep(wait_time)
 
             start = i*100
-            artist_page = requests.get(artist['artist_url']+f"?start={start}", timeout=10)
-            artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
-            soups.append(artist_soup)
+            try:
+                artist_page = requests.get(artist['artist_url']+f"?start={start}", timeout=10)
+                artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
+                soups.append(artist_soup)
+            except ConnectionError as e:
+                logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}")
 
     # iterate over each artist page to get a list of individual works
     for soup in soups:
@@ -75,10 +79,12 @@ for artist in artist_pages:
     for work in prints:
         print(f"throttling for {wait_time} seconds before grabbing print page")
         time.sleep(wait_time)
-
-        print_page = requests.get(work['print_url'], timeout=10)
-        print_soup = BeautifulSoup(print_page.text, 'html.parser')
-
+        try:
+            print_page = requests.get(work['print_url'], timeout=10)
+            print_soup = BeautifulSoup(print_page.text, 'html.parser')
+        except ConnectionError as e:
+            logfile.write(f"got {type(e)} error when trying to download a print {work['print_url']}")
+            continue
         metadata = print_soup.find('div', class_='details')
         if metadata:
             text_metadata = re.sub(r"\t+", ' ', re.sub(r"\s+", ' ', metadata.text)).strip()
@@ -120,8 +126,11 @@ for artist in artist_pages:
 
         print(f"throttling for {wait_time} seconds before grabbing image: {filepath}")
         time.sleep(wait_time)
-
-        image_response = requests.get(image_url, timeout=10)
+        try:
+            image_response = requests.get(image_url, timeout=10)
+        except ConnectionError as e:
+            logfile.write(f"got {type(e)} error when trying to download an image {image_url}")
+            continue
         if image_response:
             try:
                 image = pyexiv2.ImageData(image_response.content)
@@ -144,3 +153,4 @@ for artist in artist_pages:
             outfile.write(image.get_bytes())
 
 logfile.close()
+
