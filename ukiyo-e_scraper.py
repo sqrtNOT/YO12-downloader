@@ -6,11 +6,12 @@ import os
 import time
 import re
 import pyexiv2
+import glob
 
 # output_directory is where the image files will be saved
 output_directory = ""
 # log file is where any failed downloads, corrupt images, etc. will be written
-logfile = open("", 'w')
+logfile = open("", 'a')
 # how long to wait between each request in seconds
 wait_time = 10
 
@@ -32,8 +33,7 @@ for artist in artist_pages:
     artist_path = (os.path.join(output_directory, artist['artist_name']))
     if not os.path.exists(artist_path):
         os.makedirs(artist_path)
-
-    print(f"throttling for {wait_time} seconds before grabbing first artist page")
+    print(f"throttling for {wait_time} seconds before grabbing first artist page for {artist['artist_name']}")
     time.sleep(wait_time)
     prints = []
     soups = []
@@ -42,7 +42,7 @@ for artist in artist_pages:
         artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
         soups.append(artist_soup)
     except Exception as e:
-        logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}")
+        logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}\n")
         continue
     # Handle pagination because only 100 prints are displayed at a time
     try:
@@ -50,6 +50,10 @@ for artist in artist_pages:
     except Exception:
         logfile.write(f"failed to get print count for {artist['artist_url']}\n")
         print_count = 0
+    if len(os.listdir(artist_path)) >= print_count:
+        # already finished downloading this artist
+        print(f"skipping artist {artist['artist_name']}")
+        continue
     if print_count > 100:
         for i in range(1, print_count//100+1):
             print(f"throttling for {wait_time} seconds before grabbing extra artist pages")
@@ -61,7 +65,7 @@ for artist in artist_pages:
                 artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
                 soups.append(artist_soup)
             except Exception as e:
-                logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}")
+                logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}\n")
 
     # iterate over each artist page to get a list of individual works
     for soup in soups:
@@ -77,13 +81,19 @@ for artist in artist_pages:
 
     # each print has its own page with metadata and a link to the full res image
     for work in prints:
-        print(f"throttling for {wait_time} seconds before grabbing print page")
+        filename = "_".join(work['print_url'].split('/')[-2:])
+        filepath = work['artist_path'] + filename
+        if(glob.glob(filepath+".*")):
+            # file already downloaded
+            print(f"{filepath} already downloaded")
+            continue
+        print(f"throttling for {wait_time} seconds before grabbing print page\n")
         time.sleep(wait_time)
         try:
             print_page = requests.get(work['print_url'], timeout=10)
             print_soup = BeautifulSoup(print_page.text, 'html.parser')
         except Exception as e:
-            logfile.write(f"got {type(e)} error when trying to download a print {work['print_url']}")
+            logfile.write(f"got {type(e)} error when trying to download a print {work['print_url']}\n")
             continue
         metadata = print_soup.find('div', class_='details')
         if metadata:
@@ -121,15 +131,14 @@ for artist in artist_pages:
         description = f"{work['artist_name']}, {description}, {date}".strip(', ')
 
         # download image and save with metadata added to the exif tags
-        filename = "_".join(work['print_url'].split('/')[-2:])
-        filepath = work['artist_path'] + filename + "." + image_extension
+        filepath = filepath + "." + image_extension
 
         print(f"throttling for {wait_time} seconds before grabbing image: {filepath}")
         time.sleep(wait_time)
         try:
             image_response = requests.get(image_url, timeout=10)
         except Exception as e:
-            logfile.write(f"got {type(e)} error when trying to download an image {image_url}")
+            logfile.write(f"got {type(e)} error when trying to download an image {image_url}\n")
             continue
         if image_response:
             try:
