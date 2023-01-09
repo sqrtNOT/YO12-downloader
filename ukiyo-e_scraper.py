@@ -11,7 +11,7 @@ import glob
 # output_directory is where the image files will be saved
 output_directory = ""
 # log file is where any failed downloads, corrupt images, etc. will be written
-logfile = open("", 'a')
+logfile = open("", "a")
 # how long to wait between each request in seconds
 wait_time = 10
 
@@ -21,32 +21,41 @@ if not os.path.exists(output_directory):
 # ukiyo-e.org isn't perfectly stable so we need to use retries so it won't crash midway
 sess = requests.Session()
 retries = Retry(total=10, backoff_factor=10)
-sess.mount('https://', HTTPAdapter(max_retries=retries))
+sess.mount("https://", HTTPAdapter(max_retries=retries))
 
 top_url = "https://ukiyo-e.org"
 top_page = requests.get(top_url, timeout=10)
-top_soup = BeautifulSoup(top_page.text, 'html.parser')
-artist_pages = [{'artist_name': x['title'], 'artist_url': x['href']} for x in top_soup.find_all('a', class_="artist")]
+top_soup = BeautifulSoup(top_page.text, "html.parser")
+artist_pages = [
+    {"artist_name": x["title"], "artist_url": x["href"]}
+    for x in top_soup.find_all("a", class_="artist")
+]
 
 for artist in artist_pages:
     # create a folder for each artist individual in the dataset
-    artist_path = (os.path.join(output_directory, artist['artist_name']))
+    artist_path = os.path.join(output_directory, artist["artist_name"])
     if not os.path.exists(artist_path):
         os.makedirs(artist_path)
-    print(f"throttling for {wait_time} seconds before grabbing first artist page for {artist['artist_name']}")
+    print(
+        f"throttling for {wait_time} seconds before grabbing first artist page for {artist['artist_name']}"
+    )
     time.sleep(wait_time)
     prints = []
     soups = []
     try:
-        artist_page = requests.get(artist['artist_url'], timeout=10)
-        artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
+        artist_page = requests.get(artist["artist_url"], timeout=10)
+        artist_soup = BeautifulSoup(artist_page.text, "html.parser")
         soups.append(artist_soup)
     except Exception as e:
-        logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}\n")
+        logfile.write(
+            f"got {type(e)} error when trying to download an artist page {artist['artist_url']}\n"
+        )
         continue
     # Handle pagination because only 100 prints are displayed at a time
     try:
-        print_count = int("".join([_ for _ in artist_soup.find('strong').text if _ in "0123456789"]))
+        print_count = int(
+            "".join([_ for _ in artist_soup.find("strong").text if _ in "0123456789"])
+        )
     except Exception:
         logfile.write(f"failed to get print count for {artist['artist_url']}\n")
         print_count = 0
@@ -55,58 +64,68 @@ for artist in artist_pages:
         print(f"skipping artist {artist['artist_name']}")
         continue
     if print_count > 100:
-        for i in range(1, print_count//100+1):
-            print(f"throttling for {wait_time} seconds before grabbing extra artist pages")
+        for i in range(1, print_count // 100 + 1):
+            print(
+                f"throttling for {wait_time} seconds before grabbing extra artist pages"
+            )
             time.sleep(wait_time)
 
-            start = i*100
+            start = i * 100
             try:
-                artist_page = requests.get(artist['artist_url']+f"?start={start}", timeout=10)
-                artist_soup = BeautifulSoup(artist_page.text, 'html.parser')
+                artist_page = requests.get(
+                    artist["artist_url"] + f"?start={start}", timeout=10
+                )
+                artist_soup = BeautifulSoup(artist_page.text, "html.parser")
                 soups.append(artist_soup)
             except Exception as e:
-                logfile.write(f"got {type(e)} error when trying to download an artist page {artist['artist_url']}\n")
+                logfile.write(
+                    f"got {type(e)} error when trying to download an artist page {artist['artist_url']}\n"
+                )
 
     # iterate over each artist page to get a list of individual works
     for soup in soups:
-        for div in soup.find_all('div', class_='img col-xs-6 col-sm-4 col-md-3'):
+        for div in soup.find_all("div", class_="img col-xs-6 col-sm-4 col-md-3"):
             try:
-                print_url = div.find('a')['href']
+                print_url = div.find("a")["href"]
                 print_metadata = artist.copy()
-                print_metadata['print_url'] = print_url
-                print_metadata['artist_path'] = artist_path+'/'
+                print_metadata["print_url"] = print_url
+                print_metadata["artist_path"] = artist_path + "/"
                 prints.append(print_metadata)
             except Exception:
                 logfile.write(f"{div} failed while extracting div from {artist}\n")
 
     # each print has its own page with metadata and a link to the full res image
     for work in prints:
-        filename = "_".join(work['print_url'].split('/')[-2:])
-        filepath = work['artist_path'] + filename
-        if(glob.glob(filepath+".*")):
+        filename = "_".join(work["print_url"].split("/")[-2:])
+        filepath = work["artist_path"] + filename
+        if glob.glob(filepath + ".*"):
             # file already downloaded
             print(f"{filepath} already downloaded")
             continue
         print(f"throttling for {wait_time} seconds before grabbing print page\n")
         time.sleep(wait_time)
         try:
-            print_page = requests.get(work['print_url'], timeout=10)
-            print_soup = BeautifulSoup(print_page.text, 'html.parser')
+            print_page = requests.get(work["print_url"], timeout=10)
+            print_soup = BeautifulSoup(print_page.text, "html.parser")
         except Exception as e:
-            logfile.write(f"got {type(e)} error when trying to download a print {work['print_url']}\n")
+            logfile.write(
+                f"got {type(e)} error when trying to download a print {work['print_url']}\n"
+            )
             continue
-        metadata = print_soup.find('div', class_='details')
+        metadata = print_soup.find("div", class_="details")
         if metadata:
-            text_metadata = re.sub(r"\t+", ' ', re.sub(r"\s+", ' ', metadata.text)).strip()
+            text_metadata = re.sub(
+                r"\t+", " ", re.sub(r"\s+", " ", metadata.text)
+            ).strip()
         else:
             # no metadata so no download link
             continue
 
-        image_search = metadata.find('a', class_='btn', href=True)
+        image_search = metadata.find("a", class_="btn", href=True)
         if image_search:
-            image_url = image_search['href']
+            image_url = image_search["href"]
             try:
-                image_extension = image_url.split('.')[-1]
+                image_extension = image_url.split(".")[-1]
             except Exception:
                 image_extension = ""
         else:
@@ -114,8 +133,12 @@ for artist in artist_pages:
             continue
 
         # description is the main with title as the fallback
-        description_search = re.search(r'Description\s*:([\s\S]+?)(Download Image|$)', text_metadata, re.IGNORECASE)
-        title_search = re.search(r'Title\s*:([\s\S]+?)(?:[\S]+?:)', text_metadata, re.IGNORECASE)
+        description_search = re.search(
+            r"Description\s*:([\s\S]+?)(Download Image|$)", text_metadata, re.IGNORECASE
+        )
+        title_search = re.search(
+            r"Title\s*:([\s\S]+?)(?:[\S]+?:)", text_metadata, re.IGNORECASE
+        )
 
         description = ""
         if description_search:
@@ -124,11 +147,13 @@ for artist in artist_pages:
             description = title_search.group(1).strip()
 
         # dates are in an extremely inconsistent format so we just grab it all
-        date_search = re.search(r'Date\s*:([\s\S]+?)(?:[\S]+?:)', text_metadata, re.IGNORECASE)
+        date_search = re.search(
+            r"Date\s*:([\s\S]+?)(?:[\S]+?:)", text_metadata, re.IGNORECASE
+        )
         date = ""
         if date_search:
             date = date_search.group(1).strip()
-        description = f"{work['artist_name']}, {description}, {date}".strip(', ')
+        description = f"{work['artist_name']}, {description}, {date}".strip(", ")
 
         # download image and save with metadata added to the exif tags
         filepath = filepath + "." + image_extension
@@ -138,7 +163,9 @@ for artist in artist_pages:
         try:
             image_response = requests.get(image_url, timeout=10)
         except Exception as e:
-            logfile.write(f"got {type(e)} error when trying to download an image {image_url}\n")
+            logfile.write(
+                f"got {type(e)} error when trying to download an image {image_url}\n"
+            )
             continue
         if image_response:
             try:
@@ -153,12 +180,16 @@ for artist in artist_pages:
         # if something isn't jpeg or png then writing the exif data will fail
         try:
             image.clear_exif()
-            image.modify_exif({'Exif.Image.ImageDescription': description,
-                               'Exif.Image.Artist': work['artist_name']})
+            image.modify_exif(
+                {
+                    "Exif.Image.ImageDescription": description,
+                    "Exif.Image.Artist": work["artist_name"],
+                }
+            )
         except Exception:
             logfile.write(f"{filename} has no exif capability\n")
         # write file to disk
-        with open(filepath, 'wb') as outfile:
+        with open(filepath, "wb") as outfile:
             outfile.write(image.get_bytes())
 
 logfile.close()
