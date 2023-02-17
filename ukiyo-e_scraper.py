@@ -32,7 +32,7 @@ artist_pages = [
 ]
 
 for artist in artist_pages:
-    # create a folder for each artist individual in the dataset
+    # create a folder for each individual artist in the dataset
     artist_path = os.path.join(output_directory, artist["artist_name"])
     if not os.path.exists(artist_path):
         os.makedirs(artist_path)
@@ -191,5 +191,5 @@ for artist in artist_pages:
         # write file to disk
         with open(filepath, "wb") as outfile:
             outfile.write(image.get_bytes())
-
+        image.close()
 logfile.close()
